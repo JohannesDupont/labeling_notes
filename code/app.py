@@ -154,9 +154,10 @@ if __name__ == '__main__':
             last_labeled_index = results.index(None)
         except ValueError:  # All notes have been labeled
             last_labeled_index = len(notes) - 1
-    else:
-        results = [None] * len(notes)
-        create_empty_results_csv(result_filename)
+        else:
+            results = [None] * len(notes)
+            create_empty_results_csv(result_filename)
+            last_labeled_index = 0
 
     root = tk.Tk()
     app = LabelingApp(root)
