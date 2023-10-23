@@ -12,7 +12,7 @@ REGEX_PATTERNS = {
     "Esophageal Varices": r"\b(esophageal varices|varices|varix|dilated veins in esophagus)\b",
     "Ulcer": r"\b(ulcer|ulceration|peptic ulcer|gastric ulcer|duodenal ulcer|esophageal ulcer|stomach ulcer)\b",
     "Ulcer with stigmata": r"(?:\b(?:\w+\W+){0,5}(stigmata|stigmata of recent hemorrhage|signs of recent bleeding|active bleeding|visible vessel|spurting vessel|oozing vessel)(?:\W+\w+){0,5}\bulcer\b)|(?:\bulcer(?:\W+\w+){0,5}\W+(stigmata|stigmata of recent hemorrhage|signs of recent bleeding|active bleeding|visible vessel|spurting vessel|oozing vessel)(?:\W+\w+){0,5}\b)",
-    "Erosions": r"\b(erosions|eroded areas?|erosive disease|esophageal erosions|gastric erosions|duodenal erosions)\b",
+    "Erosions": r"\b(erosions|eroded areas?|erosive disease|erosion|esophageal erosions|gastric erosions|duodenal erosions)\b",
     "Malignancy": r"\b(malignancy|malignant|cancer|carcinoma|sarcoma|lymphoma|leukemia|metastatic|neoplastic|tumour|tumor|oncology|neoplasia|carcinogenesis|adenocarcinoma|carcinogen|neoplasm|cancerous|cancerous cells)\b",
     "No Lesion Identified, normal endoscopy": r"\b(no lesions? identified|normal endoscopy|no abnormalities found|no abnormal findings|endoscopy normal|normal esophagogastroduodenoscopy|normal EGD|no significant findings)\b"
 }
@@ -122,24 +122,41 @@ def create_empty_results_csv(filename):
         writer = csv.writer(csvfile)
         writer.writerow(['PAT_ENC_CSN_ID'] + list(REGEX_PATTERNS.keys()))
 
+def load_existing_results(filename):
+    results = [None] * len(notes)
+    with open(filename, 'r') as csvfile:
+        reader = csv.reader(csvfile)
+        next(reader)  # Skip header row
+        for row in reader:
+            index = [note[0] for note in notes].index(row[0])  # Get the index of the note with this PAT_ENC_CSN_ID
+            labels = [bool(int(label_value)) for label_value in row[1:]]
+            results[index] = (row[0], labels)
+    return results
+
+
 if __name__ == '__main__':
     notes = []
 
-    with open(note_filename, 'r') as csvfile:
-        reader = csv.DictReader(csvfile)
-        for row in reader:
-            note_id = row['PAT_ENC_CSN_ID']
-            note_text = row['ORDER_RESULT_COMPONENT_COMMENTS']
-            notes.append((note_id, note_text))
+    # Load notes from the CSV
+    with open(note_filename, 'r', encoding="utf-8") as file:
+        reader = csv.reader(file)
+        next(reader)  # skip header
+        notes = [tuple(row) for row in reader]
 
-    results = [None] * len(notes)
-
-    if not os.path.exists(result_filename):
+    if os.path.exists(result_filename):
+        results = load_existing_results(result_filename)
+        # Find the last labeled note (the first None in results) and set current_index accordingly
+        try:
+            last_labeled_index = results.index(None)
+        except ValueError:  # All notes have been labeled
+            last_labeled_index = len(notes) - 1
+    else:
+        results = [None] * len(notes)
         create_empty_results_csv(result_filename)
 
     root = tk.Tk()
     app = LabelingApp(root)
-    app.current_index = 0
+    app.current_index = last_labeled_index  # Adjusting the index here, after initializing the app
     app.show_note()
     root.protocol("WM_DELETE_WINDOW", on_closing)  # Handle the window closing event
     root.mainloop()
