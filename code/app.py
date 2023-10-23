@@ -11,9 +11,9 @@ REGEX_PATTERNS = {
     "Esophagitis": r"\b(esophagitis|inflammation of the esophagus|esophageal inflammation)\b",
     "Esophageal Varices": r"\b(esophageal varices|varices|varix|dilated veins in esophagus)\b",
     "Ulcer": r"\b(ulcer|ulceration|peptic ulcer|gastric ulcer|duodenal ulcer|esophageal ulcer|stomach ulcer)\b",
-    "Ulcer with stigmata": r"(?:\b(?:\w+\W+){0,5}(stigmata|stigmata of recent hemorrhage|signs of recent bleeding|active bleeding|visible vessel|spurting vessel|oozing vessel)(?:\W+\w+){0,5}\bulcer\b)|(?:\bulcer(?:\W+\w+){0,5}\W+(stigmata|stigmata of recent hemorrhage|signs of recent bleeding|active bleeding|visible vessel|spurting vessel|oozing vessel)(?:\W+\w+){0,5}\b)",
-    "Erosions": r"\b(erosions|eroded areas?|erosive disease|erosion|esophageal erosions|gastric erosions|duodenal erosions)\b",
-    "Malignancy": r"\b(malignancy|malignant|cancer|carcinoma|sarcoma|lymphoma|leukemia|metastatic|neoplastic|tumour|tumor|oncology|neoplasia|carcinogenesis|adenocarcinoma|carcinogen|neoplasm|cancerous|cancerous cells)\b",
+    "Ulcer with stigmata": r"(?:\b(?:\w+\W+){0,5}(stigmata|stigmata of recent hemorrhage|signs of recent bleeding|bleeding|active bleeding|visible vessel|spurting vessel|oozing vessel)(?:\W+\w+){0,5}\bulcer\b)|(?:\bulcer(?:\W+\w+){0,5}\W+(stigmata|stigmata of recent hemorrhage|signs of recent bleeding|active bleeding|visible vessel|spurting vessel|oozing vessel)(?:\W+\w+){0,5}\b)",
+    "Erosions": r"\b(erosions|eroded areas?|erosive disease|erosion|erosive|esophageal erosions|gastric erosions|duodenal erosions)\b",
+    "Malignancy": r"\b(malignancy|malignant|cancer|mass|carcinoma|sarcoma|metastasis|metast|lymphoma|leukemia|metastatic|neoplastic|tumour|tumor|oncology|neoplasia|carcinogenesis|adenocarcinoma|carcinogen|neoplasm|cancerous|cancerous cells)\b",
     "No Lesion Identified, normal endoscopy": r"\b(no lesions? identified|normal endoscopy|no abnormalities found|no abnormal findings|endoscopy normal|normal esophagogastroduodenoscopy|normal EGD|no significant findings)\b"
 }
 
@@ -63,14 +63,18 @@ class LabelingApp:
             writer.writerow(['PAT_ENC_CSN_ID'] + list(REGEX_PATTERNS.keys()))
             for row in results:
                 if row:  # Check if the row is not None
-                    writer.writerow([row[0]] + row[1])
+                    writer.writerow([row[0]] + ['True' if label else 'False' for label in row[1]])  # Change here
     
     def update_progress(self):
         self.progress['value'] = (self.current_index / len(notes)) * 100
         self.root.title(f"Labeling Notes ({self.current_index+1}/{len(notes)})")
 
     def update_results(self):
-        note_id, _ = notes[self.current_index]
+        note_entry = notes[self.current_index]
+        if len(note_entry) != 2:  # Check if the entry has an unexpected number of values
+            print(f"Warning: Unexpected entry format at index {self.current_index}: {note_entry}")
+            return
+        note_id, _ = note_entry
         labels = self.get_labels()
         results[self.current_index] = (note_id, labels)
 
@@ -108,14 +112,15 @@ class LabelingApp:
 
 
 def on_closing():
-    app.update_results()  # Save the results of the current note
+    app.update_results()
     with open(result_filename, 'w', newline='') as csvfile:
         writer = csv.writer(csvfile)
         writer.writerow(['PAT_ENC_CSN_ID'] + list(REGEX_PATTERNS.keys()))
         for row in results:
             if row:  # Check if the row is not None
-                writer.writerow([row[0]] + row[1])
+                writer.writerow([row[0]] + ['True' if label else 'False' for label in row[1]])  # Change here
     root.destroy()
+
 
 def create_empty_results_csv(filename):
     with open(filename, 'w', newline='') as csvfile:
@@ -128,8 +133,8 @@ def load_existing_results(filename):
         reader = csv.reader(csvfile)
         next(reader)  # Skip header row
         for row in reader:
-            index = [note[0] for note in notes].index(row[0])  # Get the index of the note with this PAT_ENC_CSN_ID
-            labels = [bool(int(label_value)) for label_value in row[1:]]
+            index = [note[0] for note in notes].index(row[0])
+            labels = [label_value == 'True' for label_value in row[1:]]  # Change here
             results[index] = (row[0], labels)
     return results
 
@@ -139,9 +144,8 @@ if __name__ == '__main__':
 
     # Load notes from the CSV
     with open(note_filename, 'r', encoding="utf-8") as file:
-        reader = csv.reader(file)
-        next(reader)  # skip header
-        notes = [tuple(row) for row in reader]
+        reader = csv.DictReader(file)
+        notes = [(row['PAT_ENC_CSN_ID'], row['ORDER_RESULT_COMPONENT_COMMENTS']) for row in reader]
 
     if os.path.exists(result_filename):
         results = load_existing_results(result_filename)
