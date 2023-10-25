@@ -13,8 +13,12 @@ REGEX_PATTERNS = {
     "Ulcer": r"\b(ulcer|ulceration|peptic ulcer|gastric ulcer|duodenal ulcer|esophageal ulcer|stomach ulcer)\b",
     "Ulcer with stigmata": r"(?:\b(?:\w+\W+){0,5}(stigmata|stigmata of recent hemorrhage|signs of recent bleeding|bleeding|active bleeding|visible vessel|spurting vessel|oozing vessel)(?:\W+\w+){0,5}\bulcer\b)|(?:\bulcer(?:\W+\w+){0,5}\W+(stigmata|stigmata of recent hemorrhage|signs of recent bleeding|active bleeding|visible vessel|spurting vessel|oozing vessel)(?:\W+\w+){0,5}\b)",
     "Erosions": r"\b(erosions|eroded areas?|erosive disease|erosion|erosive|esophageal erosions|gastric erosions|duodenal erosions)\b",
-    "Malignancy": r"\b(malignancy|malignant|cancer|mass|carcinoma|sarcoma|metastasis|metast|lymphoma|leukemia|metastatic|neoplastic|tumour|tumor|oncology|neoplasia|carcinogenesis|adenocarcinoma|carcinogen|neoplasm|cancerous|cancerous cells)\b",
-    "No Lesion Identified, normal endoscopy": r"\b(no lesions? identified|normal endoscopy|no abnormalities found|no abnormal findings|endoscopy normal|normal esophagogastroduodenoscopy|normal EGD|no significant findings)\b"
+    "Malignancy": r"\b(malignancy|malignant|cancer|mass|carcinoma|gist|sarcoma|metastasis|metast|lymphoma|leukemia|metastatic|neoplastic|tumour|tumor|oncology|neoplasia|carcinogenesis|adenocarcinoma|carcinogen|neoplasm|cancerous|cancerous cells)\b",
+    "Major stigmata of recent hemorrhage": r"\b(major\s+stigmata\s+of\s+recent\s+hemorrhage|msrh|major\s+stigmata(?:\s+of)?\s+hemorrhage?|blood|bleeding|active\s+bleeding|fresh\s+blood|old\s+blood|recent\s+hemorrhage|blood\s+clots)\b",
+    "No Lesion Identified, normal endoscopy": r"\b(no lesions? identified|normal endoscopy|no abnormalities found|no abnormal findings|endoscopy normal|normal esophagogastroduodenoscopy|normal EGD|no significant findings)\b",
+
+    "Negation Terms": r"\b(no(?: evidence of| signs of)?|without|not|negative|absent|none|neither|nor)\b",
+
 }
 
 class LabelingApp:
@@ -27,6 +31,7 @@ class LabelingApp:
         self.progress.pack(pady=20)
         self.labels = {key: tk.BooleanVar() for key in REGEX_PATTERNS.keys()}
         self.text_widget = tk.Text(root, wrap=tk.WORD)
+        self.text_widget.tag_configure("Negation Terms", foreground="red")
         self.text_widget.pack(padx=10, pady=10)
         self.update_progress()
         
@@ -136,32 +141,42 @@ def load_existing_results(filename):
             index = [note[0] for note in notes].index(row[0])
             labels = [label_value == 'True' for label_value in row[1:]]  # Change here
             results[index] = (row[0], labels)
-    return results
+
+    return results, index
 
 
 if __name__ == '__main__':
     notes = []
 
     # Load notes from the CSV
+    print('starting programm')
     with open(note_filename, 'r', encoding="utf-8") as file:
         reader = csv.DictReader(file)
         notes = [(row['PAT_ENC_CSN_ID'], row['ORDER_RESULT_COMPONENT_COMMENTS']) for row in reader]
 
-    if os.path.exists(result_filename):
-        results = load_existing_results(result_filename)
-        # Find the last labeled note (the first None in results) and set current_index accordingly
-        try:
-            last_labeled_index = results.index(None)
-        except ValueError:  # All notes have been labeled
-            last_labeled_index = len(notes) - 1
+        # Check if results file exists
+        if os.path.exists(result_filename):
+            print('result file exists, continuing where left off', flush=True)
+            results, last_labeled_index= load_existing_results(result_filename)
+            # Find the last labeled note (the first None in results) and set current_index accordingly
+            try:
+                last_labeled_index = results.index(None)
+            except ValueError:  # All notes have been labeled
+                last_labeled_index = len(notes) - 1
         else:
             results = [None] * len(notes)
             create_empty_results_csv(result_filename)
             last_labeled_index = 0
+    
+
 
     root = tk.Tk()
     app = LabelingApp(root)
-    app.current_index = last_labeled_index  # Adjusting the index here, after initializing the app
+    
+    #app.current_index = last_labeled_index 
+    print('last_labeled_index', last_labeled_index)
+    app.current_index = last_labeled_index if 'last_labeled_index' in locals() else 0
     app.show_note()
+    print('app ready', flush=True)
     root.protocol("WM_DELETE_WINDOW", on_closing)  # Handle the window closing event
     root.mainloop()
